@@ -9,3 +9,45 @@
   (truing-append [lhs : TruingExpr] [rhs : TruingExpr]) ; (string-append a b)
   (truing-reverse [expr : TruingExpr])) ; (rope-reverse s)
 
+(define sample-truing-literal (truing-literal "hello"))
+(define sample-truing-append (truing-append (truing-literal "Hello ") (truing-literal "world!")))
+(define sample-truing-reverse (truing-reverse (truing-literal "radar")))
+(define sample-truing-nested (truing-append (truing-reverse (truing-literal "olleh"))
+                                        (truing-literal " there"))) ; AST
+
+(define (truing-interpret [expr : TruingExpr]) : String
+  (type-case TruingExpr expr
+    [(truing-literal str) str]
+    [(truing-append lsh rsh) (string-append (truing-interpret lsh) (truing-interpret rsh))]
+    [(truing-reverse e) (list->string (reverse (string->list (truing-interpret e)))) ]))
+
+(test (truing-interpret sample-truing-literal) "hello")
+(test (truing-interpret sample-truing-append) "Hello world!")
+(test (truing-interpret sample-truing-reverse) "radar")
+(test (truing-interpret sample-truing-nested) "hello there")
+
+; concrete syntax for Truing language
+; "hello"
+; {+ "hello" "there"}
+; {& "racecar"}
+; {& {+ "ab" "cd"}}
+; {+ {& "ab"} "ck"}
+; (E)BNF (Extended) Backus-Naur Form
+; <expression> ::= <literal> | <append> | <reverse>
+; <character> ::= "A" | "B" | "C" ... "a" | "b" | "c" ...
+; <literal> ::= "\"" <character>* "\""
+; <append> ::= "{" "+" <expression> <expression> "}"
+; <reverse> ::= "{" "&" <expression> "}"
+
+(define (truing-parse [s : S-Exp]) : TruingExpr
+  (cond
+    [(s-exp-match? `String s)      (truing-literal (s-exp->string s))]
+    [(s-exp-match? `{+ ANY ANY} s) (truing-append (truing-parse (second (s-exp->list s)))
+                                                  (truing-parse (third (s-exp->list s))))]
+    [(s-exp-match? `{& ANY} s)       (truing-reverse (truing-parse (second (s-exp->list s))))]))
+
+(test (truing-parse `"hello") (truing-literal "hello"))
+(test (truing-parse `"") (truing-literal ""))
+(test (truing-parse `{+ "a" "b"})
+      (truing-append (truing-literal "a")
+                     (truing-literal "b")))
