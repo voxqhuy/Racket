@@ -4,6 +4,38 @@
 
 ; abstract syntax for Truing language
 
+(define-type TruExpr
+  (tru-value [val : Boolean]) ; value
+  (tru-and   [lhs : TruExpr] [rhs : TruExpr]) ; AND
+  (tru-or    [lhs : TruExpr] [rhs : TruExpr]) ; OR
+  (tru-not   [expr : TruExpr])) ; NOT
+
+(define (tru-interpret [expr : TruExpr]) : Boolean
+  (type-case TruExpr expr
+    [(tru-value val) val]
+    [(tru-and lhs rhs) (and (tru-interpret lhs) (tru-interpret rhs))]
+    [(tru-or lhs rhs) (or (tru-interpret lhs) (tru-interpret rhs))]
+    [(tru-not expr) (not (tru-interpret expr))]))
+
+(define sample-tru-value (tru-value #f))
+(define sample-tru-and (tru-and (tru-and (tru-value #f) (tru-value #t)) (tru-value #t)))
+(define sample-tru-or (tru-or (tru-or (tru-value #f) (tru-value #t)) (tru-value #f)))
+(define sample-tru-not (tru-not
+                        (tru-or (tru-or (tru-value #f) (tru-value #t))
+                                (tru-and (tru-value #f) (tru-value #f))))))
+
+
+
+
+
+
+
+
+
+
+
+
+
 (define-type TruingExpr
   (truing-literal [data : String]) ; literal
   (truing-append [lhs : TruingExpr] [rhs : TruingExpr]) ; (string-append a b)
