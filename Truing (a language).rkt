@@ -31,57 +31,30 @@
 
 ; concrete syntax for Truing language
 ; #t | #f
-; {and #t #f}
-; {or  #f #t}
-; {not #t}
-; {and {or  #t #f} #f}
-; {not {and #t {or  #f #t}}}
+; {& #t #f}
+; {||  #f #t}
+; {! #t}
+; {& {||  #t #f} #f}
+; {! {& #t {||  #f #t}}}
 ; (E)BNF (Extended) Backus-Naur Form
 ; <expression> ::= <value> | <and> | <or> | <not>
 ; <value> ::= "#t" | "#f"
-; <and> ::= "{" "and" <expression> <expression> "}"
-; <or> ::=
-; <reverse> ::= "{" "&" <expression> "}"
+; <and> ::= "{" "&" <expression> <expression> "}"
+; <or> ::= "{" "||" <expression> <expression> "}"
+; <not> ::= "{" "!" <expression> "}"
+
+(define (tru-parse [s : S-Exp]) : TruExpr
+  (cond
+    [(s-exp-match? `Boolean      s) (tru-value (s-exp->boolean s))]
+    [(s-exp-match? `{& ANY ANY}  s) (tru-and   (tru-parse (second (s-exp->list s)))
+                                               (tru-parse (third  (s-exp->list s))))]
+    [(s-exp-match? `{|| ANY ANY} s) (tru-or    (tru-parse (second (s-exp->list s)))
+                                               (tru-parse (third  (s-exp->list s))))]
+    [(s-exp-match?  `{! ANY}      s) (tru-not   (tru-parse (second (s-exp->list s))))]))
 
 
 
 
-
-
-(define-type TruingExpr
-  (truing-literal [data : String]) ; literal
-  (truing-append [lhs : TruingExpr] [rhs : TruingExpr]) ; (string-append a b)
-  (truing-reverse [expr : TruingExpr])) ; (rope-reverse s)
-
-(define sample-truing-literal (truing-literal "hello"))
-(define sample-truing-append (truing-append (truing-literal "Hello ") (truing-literal "world!")))
-(define sample-truing-reverse (truing-reverse (truing-literal "radar")))
-(define sample-truing-nested (truing-append (truing-reverse (truing-literal "olleh"))
-                                        (truing-literal " there"))) ; AST
-
-(define (truing-interpret [expr : TruingExpr]) : String
-  (type-case TruingExpr expr
-    [(truing-literal str) str]
-    [(truing-append lsh rsh) (string-append (truing-interpret lsh) (truing-interpret rsh))]
-    [(truing-reverse e) (list->string (reverse (string->list (truing-interpret e)))) ]))
-
-(test (truing-interpret sample-truing-literal) "hello")
-(test (truing-interpret sample-truing-append) "Hello world!")
-(test (truing-interpret sample-truing-reverse) "radar")
-(test (truing-interpret sample-truing-nested) "hello there")
-
-; concrete syntax for Truing language
-; "hello"
-; {+ "hello" "there"}
-; {& "racecar"}
-; {& {+ "ab" "cd"}}
-; {+ {& "ab"} "ck"}
-; (E)BNF (Extended) Backus-Naur Form
-; <expression> ::= <literal> | <append> | <reverse>
-; <character> ::= "A" | "B" | "C" ... "a" | "b" | "c" ...
-; <literal> ::= "\"" <character>* "\""
-; <append> ::= "{" "+" <expression> <expression> "}"
-; <reverse> ::= "{" "&" <expression> "}"
 
 (define (truing-parse [s : S-Exp]) : TruingExpr
   (cond
