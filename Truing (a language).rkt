@@ -14,22 +14,34 @@
   (type-case TruExpr expr
     [(tru-value val) val]
     [(tru-and lhs rhs) (and (tru-interpret lhs) (tru-interpret rhs))]
-    [(tru-or lhs rhs) (or (tru-interpret lhs) (tru-interpret rhs))]
-    [(tru-not expr) (not (tru-interpret expr))]))
+    [(tru-or lhs rhs)  (or  (tru-interpret lhs) (tru-interpret rhs))]
+    [(tru-not expr)    (not (tru-interpret expr))]))
 
 (define sample-tru-value (tru-value #f))
-(define sample-tru-and (tru-and (tru-and (tru-value #f) (tru-value #t)) (tru-value #t)))
-(define sample-tru-or (tru-or (tru-or (tru-value #f) (tru-value #t)) (tru-value #f)))
-(define sample-tru-not (tru-not
-                        (tru-or (tru-or (tru-value #f) (tru-value #t))
-                                (tru-and (tru-value #f) (tru-value #f)))))
+(define sample-tru-and   (tru-and (tru-and (tru-value #f) (tru-value #t)) (tru-value #t)))
+(define sample-tru-or    (tru-or  (tru-or  (tru-value #f) (tru-value #t)) (tru-value #f)))
+(define sample-tru-not   (tru-not
+                          (tru-or (tru-or  (tru-value #f) (tru-value #t))
+                                  (tru-and (tru-value #f) (tru-value #f)))))
 
 (test (tru-interpret sample-tru-value) #f)
-(test (tru-interpret sample-tru-and) #f)
-(test (tru-interpret sample-tru-or) #t)
-(test (tru-interpret sample-tru-not) #f)
+(test (tru-interpret sample-tru-and)   #f)
+(test (tru-interpret sample-tru-or)    #t)
+(test (tru-interpret sample-tru-not)   #f)
 
-
+; concrete syntax for Truing language
+; #t | #f
+; {and #t #f}
+; {or  #f #t}
+; {not #t}
+; {and {or  #t #f} #f}
+; {not {and #t {or  #f #t}}}
+; (E)BNF (Extended) Backus-Naur Form
+; <expression> ::= <value> | <and> | <or> | <not>
+; <value> ::= "#t" | "#f"
+; <and> ::= "{" "and" <expression> <expression> "}"
+; <or> ::=
+; <reverse> ::= "{" "&" <expression> "}"
 
 
 
