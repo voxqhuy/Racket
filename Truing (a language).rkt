@@ -98,3 +98,9 @@
     [(tru-or lhs rhs)  (list->s-exp (list `or  (unparse lhs) (unparse rhs)))]
     [(tru-not expr)    (list->s-exp (list `not (unparse expr)))]))
 
+(test `#f (unparse (tru-value #f)))
+
+(module+ test
+  (test `{and #f #f} (unparse (tru-and (tru-value #f) (tru-value #f))))
+  (test `{or  #f #f} (unparse (tru-or  (tru-value #f) (tru-value #f))))
+  (test `{not #f}    (unparse (tru-not (tru-value #f)))))
