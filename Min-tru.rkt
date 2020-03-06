@@ -4,13 +4,13 @@
   (print-only-errors #t))
 
 ; abstract syntax for Truing language
-
 (define-type TruExpr
   (tru-value [val : Boolean]) ; value
   (tru-and   [lhs : TruExpr] [rhs : TruExpr]) ; AND
   (tru-or    [lhs : TruExpr] [rhs : TruExpr]) ; OR
   (tru-not   [expr : TruExpr])) ; NOT
 
+; tru-interpret
 (define (tru-interpret [expr : TruExpr]) : Boolean
   (type-case TruExpr expr
     [(tru-value val) val]
@@ -19,6 +19,7 @@
     [(tru-not expr)    (not (tru-interpret expr))]))
 
 
+; VARIABLES TruExpr
 (define sample-tru-value1 (tru-value #f))
 (define sample-tru-value2 (tru-value #t))
 (define sample-tru-and1   (tru-and (tru-value #f) (tru-value #f)))
@@ -35,7 +36,7 @@
                           (tru-or  (tru-or  (tru-value #f) (tru-value #t))
                                    (tru-and (tru-value #f) (tru-value #f)))))
 
-; TESTS
+; TESTS tru-interpret
 (module+ test
   (test (tru-interpret sample-tru-value1) #f)
   (test (tru-interpret sample-tru-value2) #t)
@@ -67,6 +68,7 @@
 ; <not>        ::= "{" "not" <expression> "}"
 
 
+; tru-parse
 (define (tru-parse [s : S-Exp]) : TruExpr
   (cond
     [(s-exp-match? `{and ANY ANY} s) (tru-and   (tru-parse (second (s-exp->list s)))
@@ -77,7 +79,7 @@
     [(s-exp-match? `ANY           s) (tru-value (s-exp->boolean s))]))
     
 
-; TESTS
+; TESTS tru-parse
 (module+ test
   (test (tru-parse `#t)           (tru-value #t))
   (test (tru-parse `#f)           (tru-value #f))
@@ -88,9 +90,14 @@
   (test (tru-parse `{or #t #f})   (tru-or  (tru-value #t) (tru-value #f)))
   (test (tru-parse `{or #t #t})   (tru-or  (tru-value #t) (tru-value #t)))
   (test (tru-parse `{not  #t})    (tru-not (tru-value #t)))
-  (test (tru-parse `{not  #f})    (tru-not (tru-value #f))))
+  (test (tru-parse `{not  #f})    (tru-not (tru-value #f)))
+  (test (tru-parse `{not {or {or #f #t} {and #f #t}}})
+        (tru-not (tru-or
+                  (tru-or  (tru-value #f) (tru-value #t))
+                  (tru-and (tru-value #f) (tru-value #t))))))
 
 
+; unparse
 (define (unparse [tr : TruExpr]) : S-Exp
   (type-case TruExpr tr
     [(tru-value val)   (boolean->s-exp val)]
@@ -98,11 +105,20 @@
     [(tru-or lhs rhs)  (list->s-exp (list `or  (unparse lhs) (unparse rhs)))]
     [(tru-not expr)    (list->s-exp (list `not (unparse expr)))]))
 
+
+; TESTS unparse
 (module+ test
   (test `#f (unparse (tru-value #f)))
+  (test `#t (unparse (tru-parse `#t)))
   (test `{and #f #f} (unparse (tru-and (tru-value #f) (tru-value #f))))
   (test `{or  #f #f} (unparse (tru-or  (tru-value #f) (tru-value #f))))
-  (test `{not #f}    (unparse (tru-not (tru-value #f)))))
+  (test `{not #f}    (unparse (tru-not (tru-value #f))))
+  (test `{or  #f #t} (unparse (tru-parse `{or #f #t})))
+  (test `{not {or {or #t #t} {and #f #t}}}
+        (unparse (tru-not (tru-or (tru-or  (tru-value #t) (tru-value #t))
+                                  (tru-and (tru-value #f) (tru-value #t))))))
+  (test `{not {or {or #f #t} {and #t #t}}}
+        (unparse (tru-parse `{not {or {or #f #t} {and #t #t}}}))))
 
 
 
@@ -112,20 +128,26 @@
 ; abstract syntax for Min Truing language
 
 (define-type MinTruExpr
-  (min-tru-false [val : Boolean])
+  (min-tru-false)
   (min-tru-nand  [lhs : MinTruExpr] [rhs : MinTruExpr]))
 
-(define sample-min-tru-false (min-tru-false #f))
-(define sample-min-tru-true  (min-tru-false #t))
+
+; VARIABLES MinTruExpr
 (define sample-min-tru-nand1 (min-tru-nand
-                              sample-min-tru-false
-                              sample-min-tru-false))
+                              (min-tru-false)
+                              (min-tru-false)))   ; nand #f #f
 (define sample-min-tru-nand2 (min-tru-nand
-                              sample-min-tru-false
-                              sample-min-tru-true))
+                              (min-tru-false)
+                              (min-tru-nand
+                               (min-tru-false)
+                               (min-tru-false)))) ; nand #f #t
 (define sample-min-tru-nand3 (min-tru-nand
-                              sample-min-tru-true
-                              sample-min-tru-true))
+                              (min-tru-nand
+                               (min-tru-false)
+                               (min-tru-false))
+                              (min-tru-nand
+                               (min-tru-false)
+                               (min-tru-false)))) ; nand #t #t
 
 
 ; tru-desugar
@@ -133,8 +155,8 @@
   (type-case TruExpr tr
     [(tru-value val)   (if
                         (equal? val #f)
-                        (min-tru-false #f)
-                        (min-tru-nand (min-tru-false #f) (min-tru-false #f)))]
+                        (min-tru-false)
+                        (min-tru-nand (min-tru-false)    (min-tru-false)))]
     [(tru-and lhs rhs) (min-tru-nand
                         (min-tru-nand (tru-desugar lhs)  (tru-desugar rhs))
                         (min-tru-nand (tru-desugar lhs)  (tru-desugar rhs)))]
@@ -146,113 +168,112 @@
                         (tru-desugar expr))]))
 
 
-; TEST tru-desugar
+; TESTS tru-desugar
 (module+ test
-  (test (tru-desugar sample-tru-value1) (min-tru-false #f))
-  (test (tru-desugar sample-tru-value2) (min-tru-nand (min-tru-false #f) (min-tru-false #f)))
+  (test (tru-desugar sample-tru-value1) (min-tru-false))
+  (test (tru-desugar sample-tru-value2) (min-tru-nand (min-tru-false) (min-tru-false)))
   (test (tru-desugar sample-tru-and1) (min-tru-nand
-                                       (min-tru-nand  (min-tru-false #f) (min-tru-false #f))
-                                       (min-tru-nand  (min-tru-false #f) (min-tru-false #f))))
+                                       (min-tru-nand  (min-tru-false) (min-tru-false))
+                                       (min-tru-nand  (min-tru-false) (min-tru-false))))
   (test (tru-desugar sample-tru-and2) (min-tru-nand
                                        (min-tru-nand
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                        (min-tru-false #f))
+                                        (min-tru-nand (min-tru-false) (min-tru-false))
+                                        (min-tru-false))
                                        (min-tru-nand
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                        (min-tru-false #f))))
+                                        (min-tru-nand (min-tru-false) (min-tru-false))
+                                        (min-tru-false))))
   (test (tru-desugar sample-tru-and3) (min-tru-nand
                                        (min-tru-nand
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f)))
+                                        (min-tru-nand (min-tru-false) (min-tru-false))
+                                        (min-tru-nand (min-tru-false) (min-tru-false)))
                                        (min-tru-nand
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f)))))
+                                        (min-tru-nand (min-tru-false) (min-tru-false))
+                                        (min-tru-nand (min-tru-false) (min-tru-false)))))
   (test (tru-desugar sample-tru-and4) (min-tru-nand
                                        (min-tru-nand
                                         (min-tru-nand
                                          (min-tru-nand
-                                          (min-tru-false #f)
-                                          (min-tru-nand (min-tru-false #f) (min-tru-false #f)))
+                                          (min-tru-false)
+                                          (min-tru-nand (min-tru-false) (min-tru-false)))
                                          (min-tru-nand
-                                          (min-tru-false #f)
-                                          (min-tru-nand (min-tru-false #f) (min-tru-false #f))))
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f)))
+                                          (min-tru-false)
+                                          (min-tru-nand (min-tru-false) (min-tru-false))))
+                                        (min-tru-nand (min-tru-false) (min-tru-false)))
                                        (min-tru-nand
                                         (min-tru-nand
                                          (min-tru-nand
-                                          (min-tru-false #f)
-                                          (min-tru-nand (min-tru-false #f) (min-tru-false #f)))
+                                          (min-tru-false)
+                                          (min-tru-nand (min-tru-false) (min-tru-false)))
                                          (min-tru-nand
-                                          (min-tru-false #f)
-                                          (min-tru-nand (min-tru-false #f) (min-tru-false #f))))
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f)))))
+                                          (min-tru-false)
+                                          (min-tru-nand (min-tru-false) (min-tru-false))))
+                                        (min-tru-nand (min-tru-false) (min-tru-false)))))
   (test (tru-desugar sample-tru-or1) (min-tru-nand
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f))))
+                                       (min-tru-nand (min-tru-false) (min-tru-false))
+                                       (min-tru-nand (min-tru-false) (min-tru-false))))
   (test (tru-desugar sample-tru-or2) (min-tru-nand (min-tru-nand
-                                                    (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                                    (min-tru-nand (min-tru-false #f) (min-tru-false #f)))
-                                                   (min-tru-nand (min-tru-false #f) (min-tru-false #f))))
+                                                    (min-tru-nand (min-tru-false) (min-tru-false))
+                                                    (min-tru-nand (min-tru-false) (min-tru-false)))
+                                                   (min-tru-nand (min-tru-false) (min-tru-false))))
   (test (tru-desugar sample-tru-or3) (min-tru-nand
                                       (min-tru-nand
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f)))
+                                       (min-tru-nand (min-tru-false) (min-tru-false))
+                                       (min-tru-nand (min-tru-false) (min-tru-false)))
                                       (min-tru-nand
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f)))))
+                                       (min-tru-nand (min-tru-false) (min-tru-false))
+                                       (min-tru-nand (min-tru-false) (min-tru-false)))))
   (test (tru-desugar sample-tru-or4) (min-tru-nand
                                       (min-tru-nand
                                        (min-tru-nand
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f))
+                                        (min-tru-nand (min-tru-false) (min-tru-false))
                                         (min-tru-nand
-                                         (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                         (min-tru-nand (min-tru-false #f) (min-tru-false #f))))
+                                         (min-tru-nand (min-tru-false) (min-tru-false))
+                                         (min-tru-nand (min-tru-false) (min-tru-false))))
                                        (min-tru-nand
-                                        (min-tru-nand (min-tru-false #f) (min-tru-false #f))
+                                        (min-tru-nand (min-tru-false) (min-tru-false))
                                         (min-tru-nand
-                                         (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                         (min-tru-nand (min-tru-false #f) (min-tru-false #f)))))
-                                      (min-tru-nand (min-tru-false #f) (min-tru-false #f))))
+                                         (min-tru-nand (min-tru-false) (min-tru-false))
+                                         (min-tru-nand (min-tru-false) (min-tru-false)))))
+                                      (min-tru-nand (min-tru-false) (min-tru-false))))
   (test (tru-desugar sample-tru-not1) (min-tru-nand
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f))
-                                       (min-tru-nand (min-tru-false #f) (min-tru-false #f))))
+                                       (min-tru-nand (min-tru-false) (min-tru-false))
+                                       (min-tru-nand (min-tru-false) (min-tru-false))))
   (test (tru-desugar sample-tru-not2) (min-tru-nand
-                                       (min-tru-false #f)
-                                       (min-tru-false #f))))
+                                       (min-tru-false)
+                                       (min-tru-false))))
 
 
 ; min-tru-interpret
 (define (min-tru-interpret [expr : MinTruExpr]) : Boolean
   (type-case MinTruExpr expr
-    [(min-tru-false val) val]
+    [(min-tru-false) #f]
     [(min-tru-nand  lhs rhs) (not
                               (and
                                (min-tru-interpret lhs)
                                (min-tru-interpret rhs)))]))
 
 
-; TEST min-tru-interpret
+; TESTS min-tru-interpret
 (module+ test
-  (test (min-tru-interpret sample-min-tru-false) #f)
-  (test (min-tru-interpret sample-min-tru-true)  #t)
+  (test (min-tru-interpret (min-tru-false)) #f)
   (test (min-tru-interpret sample-min-tru-nand1) #t)
   (test (min-tru-interpret sample-min-tru-nand2) #t)
   (test (min-tru-interpret sample-min-tru-nand3) #f)
   (test (min-tru-interpret (tru-desugar sample-tru-value1)) #f)
   (test (min-tru-interpret (tru-desugar sample-tru-value2)) #t)
-  (test (min-tru-interpret (tru-desugar sample-tru-and1)) #f)
-  (test (min-tru-interpret (tru-desugar sample-tru-and2)) #f)
-  (test (min-tru-interpret (tru-desugar sample-tru-and3)) #t)
-  (test (min-tru-interpret (tru-desugar sample-tru-and4)) #f)
-  (test (min-tru-interpret (tru-desugar sample-tru-or1))  #f)
-  (test (min-tru-interpret (tru-desugar sample-tru-or2))  #t)
-  (test (min-tru-interpret (tru-desugar sample-tru-or3))  #t)
-  (test (min-tru-interpret (tru-desugar sample-tru-or4))  #t)
-  (test (min-tru-interpret (tru-desugar sample-tru-not1)) #f)
-  (test (min-tru-interpret (tru-desugar sample-tru-not2)) #t)
-  (test (min-tru-interpret (tru-desugar sample-tru-not3)) #f)
-  (test (min-tru-interpret (tru-desugar (tru-parse `#t))) #t)
-  (test (min-tru-interpret (tru-desugar (tru-parse `#f))) #f)
+  (test (min-tru-interpret (tru-desugar sample-tru-and1))   #f)
+  (test (min-tru-interpret (tru-desugar sample-tru-and2))   #f)
+  (test (min-tru-interpret (tru-desugar sample-tru-and3))   #t)
+  (test (min-tru-interpret (tru-desugar sample-tru-and4))   #f)
+  (test (min-tru-interpret (tru-desugar sample-tru-or1))    #f)
+  (test (min-tru-interpret (tru-desugar sample-tru-or2))    #t)
+  (test (min-tru-interpret (tru-desugar sample-tru-or3))    #t)
+  (test (min-tru-interpret (tru-desugar sample-tru-or4))    #t)
+  (test (min-tru-interpret (tru-desugar sample-tru-not1))   #f)
+  (test (min-tru-interpret (tru-desugar sample-tru-not2))   #t)
+  (test (min-tru-interpret (tru-desugar sample-tru-not3))   #f)
+  (test (min-tru-interpret (tru-desugar (tru-parse `#t)))   #t)
+  (test (min-tru-interpret (tru-desugar (tru-parse `#f)))   #f)
   (test (min-tru-interpret (tru-desugar (tru-parse `{and #f #f}))) #f)
   (test (min-tru-interpret (tru-desugar (tru-parse `{and #t #f}))) #f)
   (test (min-tru-interpret (tru-desugar (tru-parse `{and #t #t}))) #t)
@@ -261,27 +282,3 @@
   (test (min-tru-interpret (tru-desugar (tru-parse `{or  #t #t}))) #t)
   (test (min-tru-interpret (tru-desugar (tru-parse `{not #t})))    #f)
   (test (min-tru-interpret (tru-desugar (tru-parse `{not #f})))    #t))
-
-
-(define (short-circuits? [expr : TruExpr]) : Boolean
-	(type-case TruExpr expr
-		[(tru-value v) #t]
-		[(tru-and lhs rhs) (equal? (tru-interpret lhs) #f)]
-		[(tru-or lhs rhs)  (equal? (tru-interpret lhs) #t)]
-		[(tru-not expr) #t]))		
-
-(define tru-true (tru-value #t))
-(define tru-false (tru-value #f))
-
-(test (short-circuits? tru-false) #t)
-(test (short-circuits? tru-true) #t)
-(test (short-circuits? (tru-and tru-true tru-true))   #f)
-(test (short-circuits? (tru-and tru-true tru-false))  #f)
-(test (short-circuits? (tru-and tru-false tru-true))  #t)
-(test (short-circuits? (tru-and tru-false tru-false)) #t)
-(test (short-circuits? (tru-or tru-true tru-true))   #t)
-(test (short-circuits? (tru-or tru-true tru-false))  #t)
-(test (short-circuits? (tru-or tru-false tru-true))  #f)
-(test (short-circuits? (tru-or tru-false tru-false)) #f)
-(test (short-circuits? (tru-not tru-false)) #t)
-(test (short-circuits? (tru-not tru-true)) #t)
