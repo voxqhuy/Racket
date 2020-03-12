@@ -183,38 +183,6 @@
                      (list (numE 2) (lamE (list 'y) (multE (idE 'x) (idE 'y))))
                      (appE (idE 'time-x) (list (numE 3)))))))
 
-; map1+ : just like "map" but takes one extra argument for convenience
-(define (map1+ [function : (Exp Env -> Value)]
-               [exps     : (Listof Exp)]
-               [env      : Env]) : (Listof Value)
-  (type-case (Listof Exp) exps
-    [empty empty]
-    [(cons exp rst-exps) (cons (function exp env) (map1+ function rst-exps env))]))
-
-; map1* : just like "map1+" but returns a list of lists of values
-; given: some-func '(1 2 3) some-env, expected: '('(list 1 2 3) '(2 3) '(3))
-(define (map1* [function : (Exp Env -> Value)]
-               [exps     : (Listof Exp)]
-               [env      : Env]) : (Listof (Listof Value))
-  (cond
-    [(empty? exps) empty]
-    [(cons? exps) (append (list (map1+ function exps env)) (map1* function (rest exps) env))]))
-
-; map2* : just like "map2" but takes an element and a list
-; apply the function on the element and each element of the list
-; return a new list
-(define (bind-list [id : Symbol] [values : (Listof Value)]) : (Listof Binding)
-  (type-case (Listof Value) values
-    [empty empty]
-    [(cons val rst-vals) (cons (bind id val) (bind-list id rst-vals))]))
-
-; flat-map : flatten a list
-; given: '('(1) '(2 3)), expected: '(1 2 3)
-(define (flat-map [a : (Listof (Listof Binding))]) : (Listof Binding)
-  (type-case (Listof (Listof Binding)) a
-    [empty empty]
-    [(cons bs rst-bs) (append bs (flat-map rst-bs))]))
-  
 
 ;; interp ----------------------------------------
 (define (interp [a : Exp] [env : Env]) : Value
@@ -225,11 +193,11 @@
     [(multE l r) (num* (interp l env) (interp r env))]
     [(letE  ids exps body) (interp body
                                    (append
-                                    (map2 bind ids (map1+ interp exps env))
+                                    (map2 bind ids (map (lambda (exp) (interp exp env)) exps))
                                     env))]
     [(letE* ids exps body) (interp body
                                    (append
-                                    (flat-map (map2 bind-list ids (map1* interp exps env)))
+                                    (map2 bind ids (map (lambda (exp) (interp exp env)) exps))
                                     env))]
     [(lamE args body) (closV args body env)]
     [(appE fun argsE) (type-case Value (interp fun env)
@@ -237,7 +205,7 @@
                          (interp body
                                  (append
                                   (map2 bind argsV
-                                        (list (interp (first argsE) env))) ; TODO how to (interp exps env) foldl only takes <element> <list>
+                                        (map (lambda (arg) (interp arg env)) argsE))
                                   c-env))]
                         [else (error 'interp "not a function")])]))
 
@@ -305,6 +273,46 @@
                                 {let {[x65536 {lambda {n} {x256 {x256 n}}}]}
                                   {x65536 1}}}}}})
                 mt-env)))
+
+;; get-num
+(define (get-num [val : Value]) : Number
+  (type-case Value val
+    [(numV n) n]
+    [else (error 'get-num "not a number")]))
+
+; TESTS get-num
+(module+ test
+  (test (get-num (numV 4)) 4)
+  (test (get-num (interp (parse `2) mt-env)) 2)
+  (test (get-num (interp (parse `{+ {* 2 3} {+ 5 8}})
+                mt-env)) 19)
+  (test/exn (get-num (interp (parse `{lambda {x} {+ x x}}) mt-env))
+            "not a number")
+  (test/exn (get-num (interp (parse `{lambda {x y z} {* x {+ y z}}}) mt-env))
+            "not a number")
+  (test (get-num (interp (parse `{let {[x 1]}
+                                   {let* {[x 2]
+                                          [add-x {lambda {y} {+ x y}}]}
+                                     {add-x 3}}})
+                         mt-env))
+        4))
+
+;; get-names
+(define (get-names [val : Value]) : (Listof Symbol)
+  (type-case Value val
+    [(closV args body env) args]
+    [else (error 'get-num "not a closure")]))
+
+; TESTS get-names
+(module+ test
+  (test (get-names (interp (parse `{lambda {x} {+ x x}}) mt-env))
+        '(x))
+  (test (get-names (interp (parse `{lambda {x y z} {* x {+ y z}}}) mt-env))
+            '(x y z))
+  (test/exn (get-names (numV 4)) "not a closure")
+  (test/exn (get-names (interp (parse `2) mt-env)) "not a closure")
+  (test/exn (get-names (interp (parse `{+ {* 2 3} {+ 5 8}})
+                               mt-env)) "not a closure"))
 
 ;; num+ and num* ----------------------------------------
 (define (num-op [op : (Number Number -> Number)] [l : Value] [r : Value]) : Value
